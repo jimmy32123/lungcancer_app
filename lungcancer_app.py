@@ -8,35 +8,33 @@ import matplotlib.font_manager as fm
 import urllib.request
 
 # -------------------------------------------------------------
-# 🛠️ [스트림릿 클라우드 전용] 한글 폰트 자동 다운로드 및 설정
+# 🛠️ [스트림릿 클라우드 전용] 한글 폰트 다운로드 및 강력 고정 설정
 # -------------------------------------------------------------
 @st.cache_resource
 def setup_korean_font():
-    # 폰트를 저장할 경로 설정
     font_dir = os.path.dirname(os.path.abspath(__file__))
     font_path = os.path.join(font_dir, "NanumGothic.ttf")
     
-    # 폰트 파일이 없으면 네이버 오픈소스 나눔고딕을 다운로드
+    # 1. 폰트 파일이 없으면 구글 폰트 서버에서 다운로드
     if not os.path.exists(font_path):
         url = "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf"
         try:
             urllib.request.urlretrieve(url, font_path)
         except Exception as e:
-            return None
+            return False
 
-    # Matplotlib에 다운로드한 폰트 등록
+    # 2. Matplotlib 시스템에 폰트 직접 등록 및 기본값 강제 지정
     try:
-        fe = fm.FontEntry(fname=font_path, name='NanumGothic')
-        fm.fontManager.ttflist.insert(0, fe)
-        plt.rcParams['font.family'] = 'NanumGothic'
+        fm.fontManager.addfont(font_path)
+        prop = fm.FontProperties(fname=font_path)
+        plt.rcParams['font.family'] = prop.get_name()
+        plt.rcParams['axes.unicode_minus'] = False
+        return True
     except:
-        pass
-    
-    plt.rcParams['axes.unicode_minus'] = False
+        return False
 
-# 폰트 설정 실행
+# 폰트 설정 먼저 적용 (기타 테마가 폰트를 덮어쓰지 못하게 방지)
 setup_korean_font()
-plt.style.use('seaborn-v0_8-whitegrid') # 깔끔한 대시보드 테마 적용
 
 # -------------------------------------------------------------
 # 1. KMeans 모델 로드
@@ -135,8 +133,11 @@ if submit_button:
         df_visual = pd.DataFrame(fake_data, columns=['연령', '흡연량', '종양크기'])
         df_visual['군집'] = fake_labels
         
-        # 그래프 생성
+        # 그래프 생성 및 격자선 스타일 직접 지정 (한글 초기화 현상 방지)
         fig, ax = plt.subplots(figsize=(7, 4.5))
+        ax.grid(True, linestyle='--', alpha=0.5, color='#cccccc')
+        ax.set_facecolor('#ffffff')
+        fig.patch.set_facecolor('#ffffff')
         
         colors = {0: '#2ecc71', 1: '#3498db', 2: '#f1c40f', 3: '#e74c3c'}
         cluster_names = {
@@ -156,7 +157,8 @@ if submit_button:
                     c=colors[cluster_id], 
                     label=cluster_names[cluster_id], 
                     alpha=0.35, 
-                    s=35
+                    s=35,
+                    edgecolor='none'
                 )
             
         # ⭐️ 나의 현재 위치 마킹
@@ -164,22 +166,17 @@ if submit_button:
             age, smoking, 
             c='#2c3e50', 
             marker='*', 
-            s=400, 
+            s=350, 
             edgecolor='white', 
-            linewidth=2, 
-            label='★ 나의 현재 위치'
+            linewidth=1.5, 
+            label='★ 나의 현재 위치',
+            zorder=5  # 그래프 가장 위로 올리기
         )
         
-        # 💡 한글 패치가 완료되어 한글을 마음껏 적어도 절대 깨지지 않습니다.
-        ax.set_xlabel('연령 (나이)', fontsize=11, fontweight='bold')
-        ax.set_ylabel('흡연량 (지수)', fontsize=11, fontweight='bold')
-        ax.set_title('폐암 위험도 군집 맵 및 나의 위치', fontsize=13, fontweight='bold', pad=15)
+        # 한글 레이블 및 타이틀 설정
+        ax.set_xlabel('연령 (나이)', fontsize=11)
+        ax.set_ylabel('흡연량 (지수)', fontsize=11)
+        ax.set_title('폐암 위험도 군집 맵 및 나의 위치', fontsize=13, pad=15, fontweight='bold')
         
-        ax.legend(loc='upper right', frameon=True, facecolor='white', edgecolor='none')
-        ax.grid(True, linestyle='--', alpha=0.5)
-        
-        # 스트림릿 웹 화면에 차트 출력
-        st.pyplot(fig)
-
-    except Exception as e:
-        st.error(f"⚠️ 시각화 연산 중 에러가 발생했습니다: {e}")
+        # 범례 설정
+        ax.legend(loc='upper right', frameon=True, facecolor='white', edgecolor='#dd

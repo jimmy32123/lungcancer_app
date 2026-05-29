@@ -65,7 +65,7 @@ if submit_button:
         st.markdown("---")
         st.subheader("📊 AI 분석 결과")
         
-        # 4개 군집(0, 1, 2, 3) 결과 매핑 출력 [cite: 4]
+        # 4개 군집(0, 1, 2, 3) 결과 매핑 출력
         if cluster_result == 0:
             st.success("### 🎯 분석 결과: **[군집 0번] 최상위 건강군 (정상)**")
             st.markdown("- **상태:** 생체 위험 지표가 완벽히 정상 수치 범위에 머무르고 있는 가장 건강한 상태입니다.\n- **가이드:** 현재의 훌륭한 건강 습관과 식단을 그대로 유지하세요.")
@@ -84,7 +84,7 @@ if submit_button:
         st.subheader("📍 나의 군집 위치 시각화")
         st.caption("주변 데이터 분포 속에서 내 위치(★)가 어디에 속해 있는지 확인하세요.")
         
-        # 가상 데이터 분포 빌드 [cite: 1]
+        # 가상 데이터 분포 빌드
         np.random.seed(42)
         n_samples = 300
         
@@ -96,8 +96,8 @@ if submit_button:
         v_smoking = np.clip(v_smoking, 0, 100)
         v_tumor = np.clip(v_tumor, 0, 50)
         
-        fake_data = np.column_stack([v_age, v_smoking, v_tumor]) [cite: 1]
-        fake_labels = [int(x) for x in kmeans_model.predict(fake_data)] [cite: 1]
+        fake_data = np.column_stack([v_age, v_smoking, v_tumor])
+        fake_labels = [int(x) for x in kmeans_model.predict(fake_data)]
         
         # 데이터프레임 구성
         df_visual = pd.DataFrame(fake_data, columns=['연령', '흡연량', '종양크기'])
@@ -115,9 +115,7 @@ if submit_button:
         user_df = pd.DataFrame([[age, smoking, tumor_size, '★ 나의 현재 위치']], columns=['연령', '흡연량', '종양크기', '군집 분류'])
         df_total = pd.concat([df_visual, user_df], ignore_index=True)
         
-        # 💡 [한글 깨짐 해결의 핵심 키포인트] 
-        # Matplotlib 대신 스트림릿 내장 네이티브 차트(st.scatter_chart)를 사용합니다.
-        # 이 방식을 쓰면 서버 환경에 상관없이 앱 자체 테마를 따라 100% 한글이 깨지지 않고 깔끔하게 표기됩니다!
+        # 스트림릿 내장 네이티브 차트로 깨짐 없이 깔끔하게 한글 그래프 출력
         st.scatter_chart(
             data=df_total,
             x='연령',

@@ -3,6 +3,31 @@ import numpy as np
 import pandas as pd
 import joblib
 import os
+import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
+
+# -------------------------------------------------------------
+# 🛠️ [업로드 폰트 연동] 여기어때 잘난체 파일 시스템 등록
+# -------------------------------------------------------------
+@st.cache_resource
+def setup_uploaded_font():
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    # 사용자가 업로드한 폰트 파일명과 정확히 매칭
+    font_path = os.path.join(current_dir, "JalnanGothicTTF.ttf")
+    
+    if os.path.exists(font_path):
+        try:
+            # Matplotlib에 폰트 추가 및 기본 폰트로 설정
+            fm.fontManager.addfont(font_path)
+            prop = fm.FontProperties(fname=font_path)
+            plt.rcParams['font.family'] = prop.get_name()
+        except Exception as e:
+            st.warning(f"폰트 설정 적용 중 일시적 지연 발생: {e}")
+            
+    plt.rcParams['axes.unicode_minus'] = False
+
+# 폰트 우선 적용
+setup_uploaded_font()
 
 # -------------------------------------------------------------
 # 1. KMeans 모델 로드
@@ -59,7 +84,7 @@ if submit_button:
     input_data = np.array([[age, smoking, tumor_size]])
     
     try:
-        # 예측 결과 계산
+        # 예측 결과 계산 (타입 호환 안전장치)
         cluster_result = int(kmeans_model.predict(input_data)[0]) 
         
         st.markdown("---")
@@ -82,7 +107,6 @@ if submit_button:
         # 2) 시각화 그래프 그리기
         st.markdown(" ")
         st.subheader("📍 나의 군집 위치 시각화")
-        st.caption("주변 데이터 분포 속에서 내 위치(★)가 어디에 속해 있는지 확인하세요.")
         
         # 가상 데이터 분포 빌드
         np.random.seed(42)
@@ -99,38 +123,64 @@ if submit_button:
         fake_data = np.column_stack([v_age, v_smoking, v_tumor])
         fake_labels = [int(x) for x in kmeans_model.predict(fake_data)]
         
-        # 데이터프레임 구성
         df_visual = pd.DataFrame(fake_data, columns=['연령', '흡연량', '종양크기'])
+        df_visual['군집'] = fake_labels
         
-        # 군집 번호를 직관적인 한글 이름으로 맵핑
+        # 그래프 도화지 생성 및 스타일 정의
+        fig, ax = plt.subplots(figsize=(7, 4.5))
+        ax.grid(True, linestyle='--', alpha=0.5, color='#cccccc')
+        ax.set_facecolor('#ffffff')
+        fig.patch.set_facecolor('#ffffff')
+        
+        colors = {0: '#2ecc71', 1: '#3498db', 2: '#f1c40f', 3: '#e74c3c'}
         cluster_names = {
             0: '군집 0: 건강군', 
             1: '군집 1: 주의군', 
             2: '군집 2: 일반위험군', 
             3: '군집 3: 고위험군'
         }
-        df_visual['군집 분류'] = [cluster_names.get(x, f'군집 {x}') for x in fake_labels]
         
-        # 사용자의 현재 입력 데이터 추가
-        user_df = pd.DataFrame([[age, smoking, tumor_size, '★ 나의 현재 위치']], columns=['연령', '흡연량', '종양크기', '군집 분류'])
-        df_total = pd.concat([df_visual, user_df], ignore_index=True)
-        
-        # 스트림릿 내장 네이티브 차트로 깨짐 없이 깔끔하게 한글 그래프 출력
-        st.scatter_chart(
-            data=df_total,
-            x='연령',
-            y='흡연량',
-            color='군집 분류',
-            color_config={
-                '군집 0: 건강군': '#2ecc71',
-                '군집 1: 주의군': '#3498db',
-                '군집 2: 일반위험군': '#f1c40f',
-                '군집 3: 고위험군': '#e74c3c',
-                '★ 나의 현재 위치': '#2c3e50'
-            },
-            size=50,
-            use_container_width=True
+        # 배경 분포 산점도 플로팅
+        for cluster_id in sorted(df_visual['군집'].unique()):
+            if cluster_id in colors:
+                sub_set = df_visual[df_visual['군집'] == cluster_id]
+                ax.scatter(
+                    sub_set['연령'], 
+                    sub_set['흡연량'], 
+                    c=colors[cluster_id], 
+                    label=cluster_names[cluster_id], 
+                    alpha=0.35, 
+                    s=40,
+                    edgecolor='none'
+                )
+            
+        # ⭐️ 나의 현재 위치 마킹 (커다란 남색 별 모양)
+        ax.scatter(
+            age, smoking, 
+            c='#2c3e50', 
+            marker='*', 
+            s=400, 
+            edgecolor='white', 
+            linewidth=1.5, 
+            label='★ 나의 현재 위치',
+            zorder=5
         )
+        
+        # 제공된 폰트를 기본값으로 사용하여 한글 텍스트를 마음껏 넣어도 깨지지 않습니다!
+        ax.set_xlabel('연령 (나이)', fontsize=11)
+        ax.set_ylabel('흡연량 (지수)', fontsize=11)
+        ax.set_title('폐암 위험도 군집 맵 및 나의 위치', fontsize=14, pad=15, fontweight='bold')
+        
+        # 범례 및 외곽선 정리
+        ax.legend(loc='upper right', frameon=True, facecolor='white', edgecolor='#dddddd')
+        
+        for spine in ['top', 'right']:
+            ax.spines[spine].set_visible(False)
+        for spine in ['left', 'bottom']:
+            ax.spines[spine].set_color('#cccccc')
+            
+        # 스트림릿 대시보드에 최종 차트 출력
+        st.pyplot(fig)
 
     except Exception as e:
         st.error(f"⚠️ 시각화 연산 중 에러가 발생했습니다: {e}")

@@ -5,9 +5,13 @@ import joblib
 import os
 import matplotlib.pyplot as plt
 
-# 한글 깨짐 방지 설정
-plt.rcParams['font.family'] = 'Malgun Gothic'  # 윈도우용 (Mac의 경우 'AppleGothic' 사용)
+# -------------------------------------------------------------
+# [한글 깨짐 해결 조치] 스트림릿 클라우드(리눅스) 환경 대응 font 설정
+# -------------------------------------------------------------
+# 클라우드 서버에 없는 맑은고딕 대신 기본 Sans-Serif 구조를 사용하고,
+# 축 이름과 라벨을 영어와 숫자로 직관적으로 구성하여 깨짐 현상을 원천 차단합니다.
 plt.rcParams['axes.unicode_minus'] = False
+plt.style.use('seaborn-v0_8-whitegrid') # 그래프 디자인을 깔끔하게 변경
 
 # -------------------------------------------------------------
 # 1. KMeans 모델 로드
@@ -64,13 +68,13 @@ if submit_button:
     input_data = np.array([[age, smoking, tumor_size]])
     
     try:
-        # 예측 결과를 순수 파이썬 int형으로 강제 형변환
+        # 예측 결과 계산 (pure int 형변환)
         cluster_result = int(kmeans_model.predict(input_data)[0]) 
         
         st.markdown("---")
         st.subheader("📊 AI 분석 결과")
         
-        # 💡 [핵심 조치] 4개 군집(0, 1, 2, 3)에 대한 의미 재정립 및 연동
+        # 4개 군집(0, 1, 2, 3) 결과 매핑 출력
         if cluster_result == 0:
             st.success("### 🎯 분석 결과: **[군집 0번] 최상위 건강군 (정상)**")
             st.markdown("- **상태:** 생체 위험 지표가 완벽히 정상 수치 범위에 머무르고 있는 가장 건강한 상태입니다.\n- **가이드:** 현재의 훌륭한 건강 습관과 식단을 그대로 유지하세요.")
@@ -86,9 +90,9 @@ if submit_button:
         
         # 2) 시각화 그래프 그리기
         st.markdown(" ")
-        st.subheader("📍 나의 군집 위치 시각화")
+        st.subheader("📍 나의 군집 위치 시각화 (My Cluster Position)")
         
-        # 가상 데이터 생성 로직
+        # 가상 데이터 분포 빌드
         np.random.seed(42)
         n_samples = 300
         
@@ -101,46 +105,56 @@ if submit_button:
         v_tumor = np.clip(v_tumor, 0, 50)
         
         fake_data = np.column_stack([v_age, v_smoking, v_tumor])
-        
-        # 가상 데이터의 예측값도 전부 pure int형 리스트로 원천 세탁
         fake_labels = [int(x) for x in kmeans_model.predict(fake_data)]
         
-        df_visual = pd.DataFrame(fake_data, columns=['연령', '흡연량', '종양크기'])
-        df_visual['군집'] = fake_labels
+        df_visual = pd.DataFrame(fake_data, columns=['Age', 'Smoking', 'Tumor'])
+        df_visual['Cluster'] = fake_labels
         
-        # 그래프 생성
+        # 그래프 플로팅
         fig, ax = plt.subplots(figsize=(7, 4.5))
         
-        # 💡 [핵심 해결 포인트] 0번부터 3번까지 모든 군집의 색상과 라벨을 완벽히 매핑 (KeyError: 3 해결)
+        # 💡 한글 깨짐 원천 방지: 범례(Label) 정보를 글로벌 표준 영문/숫자 조합으로 변경
         colors = {0: '#2ecc71', 1: '#3498db', 2: '#f1c40f', 3: '#e74c3c'}
-        cluster_names = {0: '군집 0: 건강군', 1: '군집 1: 주의군', 2: '군집 2: 일반위험군', 3: '군집 3: 고위험군'}
+        cluster_names = {
+            0: 'Cluster 0: Healthy', 
+            1: 'Cluster 1: Caution', 
+            2: 'Cluster 2: Warning', 
+            3: 'Cluster 3: High Risk'
+        }
         
-        # 배경 산점도 플로팅
-        for cluster_id in sorted(df_visual['군집'].unique()):
-            cluster_id_pure = int(cluster_id)
-            
-            # 혹시나 예외적인 군집 번호가 나와도 에러가 안 나도록 방어 코드 추가
-            if cluster_id_pure in colors:
-                sub_set = df_visual[df_visual['군집'] == cluster_id_pure]
+        # 배경 산점도 시각화
+        for cluster_id in sorted(df_visual['Cluster'].unique()):
+            if cluster_id in colors:
+                sub_set = df_visual[df_visual['Cluster'] == cluster_id]
                 ax.scatter(
-                    sub_set['연령'], 
-                    sub_set['흡연량'], 
-                    c=colors[cluster_id_pure], 
-                    label=cluster_names[cluster_id_pure], 
-                    alpha=0.4, 
+                    sub_set['Age'], 
+                    sub_set['Smoking'], 
+                    c=colors[cluster_id], 
+                    label=cluster_names[cluster_id], 
+                    alpha=0.35, 
                     s=35
                 )
             
-        # ⭐️ 사용자의 현재 입력 위치 표시 ⭐️
-        ax.scatter(age, smoking, c='#2c3e50', marker='*', s=350, edgecolor='white', linewidth=1.5, label='★ 나의 현재 위치')
+        # ⭐️ 나의 현재 위치 마킹 (가장 눈에 띄는 스타일로 변경)
+        ax.scatter(
+            age, smoking, 
+            c='#2c3e50', 
+            marker='*', 
+            s=400, 
+            edgecolor='white', 
+            linewidth=2, 
+            label='★ My Position'
+        )
         
-        ax.set_xlabel('연령 (Age)')
-        ax.set_ylabel('흡연량 (Smoking Index)')
-        ax.set_title('폐암 위험도 군집 맵 및 나의 위치')
-        ax.legend(loc='upper right')
+        # 💡 축 이름 및 타이틀을 깔끔한 영문으로 매칭하여 네모(□) 현상 해결
+        ax.set_xlabel('Age (Years)', fontsize=11, fontweight='bold')
+        ax.set_ylabel('Smoking Index (Amount)', fontsize=11, fontweight='bold')
+        ax.set_title('Lung Cancer Risk Cluster Map & My Position', fontsize=13, fontweight='bold', pad=15)
+        
+        ax.legend(loc='upper right', frameon=True, facecolor='white', edgecolor='none')
         ax.grid(True, linestyle='--', alpha=0.5)
         
-        # 스트림릿에 그래프 출력
+        # 스트림릿 웹 화면에 차트 출력
         st.pyplot(fig)
 
     except Exception as e:

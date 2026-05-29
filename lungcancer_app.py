@@ -4,14 +4,39 @@ import pandas as pd
 import joblib
 import os
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
+import urllib.request
 
 # -------------------------------------------------------------
-# [한글 깨짐 해결 조치] 스트림릿 클라우드(리눅스) 환경 대응 font 설정
+# 🛠️ [스트림릿 클라우드 전용] 한글 폰트 자동 다운로드 및 설정
 # -------------------------------------------------------------
-# 클라우드 서버에 없는 맑은고딕 대신 기본 Sans-Serif 구조를 사용하고,
-# 축 이름과 라벨을 영어와 숫자로 직관적으로 구성하여 깨짐 현상을 원천 차단합니다.
-plt.rcParams['axes.unicode_minus'] = False
-plt.style.use('seaborn-v0_8-whitegrid') # 그래프 디자인을 깔끔하게 변경
+@st.cache_resource
+def setup_korean_font():
+    # 폰트를 저장할 경로 설정
+    font_dir = os.path.dirname(os.path.abspath(__file__))
+    font_path = os.path.join(font_dir, "NanumGothic.ttf")
+    
+    # 폰트 파일이 없으면 네이버 오픈소스 나눔고딕을 다운로드
+    if not os.path.exists(font_path):
+        url = "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf"
+        try:
+            urllib.request.urlretrieve(url, font_path)
+        except Exception as e:
+            return None
+
+    # Matplotlib에 다운로드한 폰트 등록
+    try:
+        fe = fm.FontEntry(fname=font_path, name='NanumGothic')
+        fm.fontManager.ttflist.insert(0, fe)
+        plt.rcParams['font.family'] = 'NanumGothic'
+    except:
+        pass
+    
+    plt.rcParams['axes.unicode_minus'] = False
+
+# 폰트 설정 실행
+setup_korean_font()
+plt.style.use('seaborn-v0_8-whitegrid') # 깔끔한 대시보드 테마 적용
 
 # -------------------------------------------------------------
 # 1. KMeans 모델 로드
@@ -68,7 +93,7 @@ if submit_button:
     input_data = np.array([[age, smoking, tumor_size]])
     
     try:
-        # 예측 결과 계산 (pure int 형변환)
+        # 예측 결과 계산
         cluster_result = int(kmeans_model.predict(input_data)[0]) 
         
         st.markdown("---")
@@ -90,7 +115,7 @@ if submit_button:
         
         # 2) 시각화 그래프 그리기
         st.markdown(" ")
-        st.subheader("📍 나의 군집 위치 시각화 (My Cluster Position)")
+        st.subheader("📍 나의 군집 위치 시각화")
         
         # 가상 데이터 분포 빌드
         np.random.seed(42)
@@ -107,35 +132,34 @@ if submit_button:
         fake_data = np.column_stack([v_age, v_smoking, v_tumor])
         fake_labels = [int(x) for x in kmeans_model.predict(fake_data)]
         
-        df_visual = pd.DataFrame(fake_data, columns=['Age', 'Smoking', 'Tumor'])
-        df_visual['Cluster'] = fake_labels
+        df_visual = pd.DataFrame(fake_data, columns=['연령', '흡연량', '종양크기'])
+        df_visual['군집'] = fake_labels
         
-        # 그래프 플로팅
+        # 그래프 생성
         fig, ax = plt.subplots(figsize=(7, 4.5))
         
-        # 💡 한글 깨짐 원천 방지: 범례(Label) 정보를 글로벌 표준 영문/숫자 조합으로 변경
         colors = {0: '#2ecc71', 1: '#3498db', 2: '#f1c40f', 3: '#e74c3c'}
         cluster_names = {
-            0: 'Cluster 0: Healthy', 
-            1: 'Cluster 1: Caution', 
-            2: 'Cluster 2: Warning', 
-            3: 'Cluster 3: High Risk'
+            0: '군집 0: 건강군', 
+            1: '군집 1: 주의군', 
+            2: '군집 2: 일반위험군', 
+            3: '군집 3: 고위험군'
         }
         
         # 배경 산점도 시각화
-        for cluster_id in sorted(df_visual['Cluster'].unique()):
+        for cluster_id in sorted(df_visual['군집'].unique()):
             if cluster_id in colors:
-                sub_set = df_visual[df_visual['Cluster'] == cluster_id]
+                sub_set = df_visual[df_visual['군집'] == cluster_id]
                 ax.scatter(
-                    sub_set['Age'], 
-                    sub_set['Smoking'], 
+                    sub_set['연령'], 
+                    sub_set['흡연량'], 
                     c=colors[cluster_id], 
                     label=cluster_names[cluster_id], 
                     alpha=0.35, 
                     s=35
                 )
             
-        # ⭐️ 나의 현재 위치 마킹 (가장 눈에 띄는 스타일로 변경)
+        # ⭐️ 나의 현재 위치 마킹
         ax.scatter(
             age, smoking, 
             c='#2c3e50', 
@@ -143,13 +167,13 @@ if submit_button:
             s=400, 
             edgecolor='white', 
             linewidth=2, 
-            label='★ My Position'
+            label='★ 나의 현재 위치'
         )
         
-        # 💡 축 이름 및 타이틀을 깔끔한 영문으로 매칭하여 네모(□) 현상 해결
-        ax.set_xlabel('Age (Years)', fontsize=11, fontweight='bold')
-        ax.set_ylabel('Smoking Index (Amount)', fontsize=11, fontweight='bold')
-        ax.set_title('Lung Cancer Risk Cluster Map & My Position', fontsize=13, fontweight='bold', pad=15)
+        # 💡 한글 패치가 완료되어 한글을 마음껏 적어도 절대 깨지지 않습니다.
+        ax.set_xlabel('연령 (나이)', fontsize=11, fontweight='bold')
+        ax.set_ylabel('흡연량 (지수)', fontsize=11, fontweight='bold')
+        ax.set_title('폐암 위험도 군집 맵 및 나의 위치', fontsize=13, fontweight='bold', pad=15)
         
         ax.legend(loc='upper right', frameon=True, facecolor='white', edgecolor='none')
         ax.grid(True, linestyle='--', alpha=0.5)

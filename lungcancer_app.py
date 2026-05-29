@@ -3,38 +3,6 @@ import numpy as np
 import pandas as pd
 import joblib
 import os
-import matplotlib.pyplot as plt
-import matplotlib.font_manager as fm
-import urllib.request
-
-# -------------------------------------------------------------
-# 🛠️ [스트림릿 클라우드 전용] 한글 폰트 다운로드 및 강력 고정 설정
-# -------------------------------------------------------------
-@st.cache_resource
-def setup_korean_font():
-    font_dir = os.path.dirname(os.path.abspath(__file__))
-    font_path = os.path.join(font_dir, "NanumGothic.ttf")
-    
-    # 1. 폰트 파일이 없으면 구글 폰트 서버에서 다운로드
-    if not os.path.exists(font_path):
-        url = "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf"
-        try:
-            urllib.request.urlretrieve(url, font_path)
-        except Exception as e:
-            return False
-
-    # 2. Matplotlib 시스템에 폰트 직접 등록 및 기본값 강제 지정
-    try:
-        fm.fontManager.addfont(font_path)
-        prop = fm.FontProperties(fname=font_path)
-        plt.rcParams['font.family'] = prop.get_name()
-        plt.rcParams['axes.unicode_minus'] = False
-        return True
-    except:
-        return False
-
-# 폰트 설정 먼저 적용 (기타 테마가 폰트를 덮어쓰지 못하게 방지)
-setup_korean_font()
 
 # -------------------------------------------------------------
 # 1. KMeans 모델 로드
@@ -97,7 +65,7 @@ if submit_button:
         st.markdown("---")
         st.subheader("📊 AI 분석 결과")
         
-        # 4개 군집(0, 1, 2, 3) 결과 매핑 출력
+        # 4개 군집(0, 1, 2, 3) 결과 매핑 출력 [cite: 4]
         if cluster_result == 0:
             st.success("### 🎯 분석 결과: **[군집 0번] 최상위 건강군 (정상)**")
             st.markdown("- **상태:** 생체 위험 지표가 완벽히 정상 수치 범위에 머무르고 있는 가장 건강한 상태입니다.\n- **가이드:** 현재의 훌륭한 건강 습관과 식단을 그대로 유지하세요.")
@@ -114,8 +82,9 @@ if submit_button:
         # 2) 시각화 그래프 그리기
         st.markdown(" ")
         st.subheader("📍 나의 군집 위치 시각화")
+        st.caption("주변 데이터 분포 속에서 내 위치(★)가 어디에 속해 있는지 확인하세요.")
         
-        # 가상 데이터 분포 빌드
+        # 가상 데이터 분포 빌드 [cite: 1]
         np.random.seed(42)
         n_samples = 300
         
@@ -127,56 +96,43 @@ if submit_button:
         v_smoking = np.clip(v_smoking, 0, 100)
         v_tumor = np.clip(v_tumor, 0, 50)
         
-        fake_data = np.column_stack([v_age, v_smoking, v_tumor])
-        fake_labels = [int(x) for x in kmeans_model.predict(fake_data)]
+        fake_data = np.column_stack([v_age, v_smoking, v_tumor]) [cite: 1]
+        fake_labels = [int(x) for x in kmeans_model.predict(fake_data)] [cite: 1]
         
+        # 데이터프레임 구성
         df_visual = pd.DataFrame(fake_data, columns=['연령', '흡연량', '종양크기'])
-        df_visual['군집'] = fake_labels
         
-        # 그래프 생성 및 격자선 스타일 직접 지정 (한글 초기화 현상 방지)
-        fig, ax = plt.subplots(figsize=(7, 4.5))
-        ax.grid(True, linestyle='--', alpha=0.5, color='#cccccc')
-        ax.set_facecolor('#ffffff')
-        fig.patch.set_facecolor('#ffffff')
-        
-        colors = {0: '#2ecc71', 1: '#3498db', 2: '#f1c40f', 3: '#e74c3c'}
+        # 군집 번호를 직관적인 한글 이름으로 맵핑
         cluster_names = {
             0: '군집 0: 건강군', 
             1: '군집 1: 주의군', 
             2: '군집 2: 일반위험군', 
             3: '군집 3: 고위험군'
         }
+        df_visual['군집 분류'] = [cluster_names.get(x, f'군집 {x}') for x in fake_labels]
         
-        # 배경 산점도 시각화
-        for cluster_id in sorted(df_visual['군집'].unique()):
-            if cluster_id in colors:
-                sub_set = df_visual[df_visual['군집'] == cluster_id]
-                ax.scatter(
-                    sub_set['연령'], 
-                    sub_set['흡연량'], 
-                    c=colors[cluster_id], 
-                    label=cluster_names[cluster_id], 
-                    alpha=0.35, 
-                    s=35,
-                    edgecolor='none'
-                )
-            
-        # ⭐️ 나의 현재 위치 마킹
-        ax.scatter(
-            age, smoking, 
-            c='#2c3e50', 
-            marker='*', 
-            s=350, 
-            edgecolor='white', 
-            linewidth=1.5, 
-            label='★ 나의 현재 위치',
-            zorder=5  # 그래프 가장 위로 올리기
+        # 사용자의 현재 입력 데이터 추가
+        user_df = pd.DataFrame([[age, smoking, tumor_size, '★ 나의 현재 위치']], columns=['연령', '흡연량', '종양크기', '군집 분류'])
+        df_total = pd.concat([df_visual, user_df], ignore_index=True)
+        
+        # 💡 [한글 깨짐 해결의 핵심 키포인트] 
+        # Matplotlib 대신 스트림릿 내장 네이티브 차트(st.scatter_chart)를 사용합니다.
+        # 이 방식을 쓰면 서버 환경에 상관없이 앱 자체 테마를 따라 100% 한글이 깨지지 않고 깔끔하게 표기됩니다!
+        st.scatter_chart(
+            data=df_total,
+            x='연령',
+            y='흡연량',
+            color='군집 분류',
+            color_config={
+                '군집 0: 건강군': '#2ecc71',
+                '군집 1: 주의군': '#3498db',
+                '군집 2: 일반위험군': '#f1c40f',
+                '군집 3: 고위험군': '#e74c3c',
+                '★ 나의 현재 위치': '#2c3e50'
+            },
+            size=50,
+            use_container_width=True
         )
-        
-        # 한글 레이블 및 타이틀 설정
-        ax.set_xlabel('연령 (나이)', fontsize=11)
-        ax.set_ylabel('흡연량 (지수)', fontsize=11)
-        ax.set_title('폐암 위험도 군집 맵 및 나의 위치', fontsize=13, pad=15, fontweight='bold')
-        
-        # 범례 설정
-        ax.legend(loc='upper right', frameon=True, facecolor='white', edgecolor='#dd
+
+    except Exception as e:
+        st.error(f"⚠️ 시각화 연산 중 에러가 발생했습니다: {e}")
